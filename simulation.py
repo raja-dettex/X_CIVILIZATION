@@ -1,7 +1,8 @@
 import random
 
 from agent import Agent
-from world import World
+from experiments.baseline import SEASONAL_FOOD
+from world import Season, World
 from metrics import MetricsCollector
 
 ENERGY_LOSS_PER_TICK = 1
@@ -10,6 +11,15 @@ MAX_ENERGY = 100
 REPRODUCTION_THRESHOLD = 80
 REPRODUCTION_COST = 40
 CHILD_START_ENERGY = 40
+MUTATION_RATE = 0.10
+MIN_REPRODUCTION_AGE = 20
+
+MIN_VISION = 1
+MAX_VISION = 10
+
+VISION_ENERGY_COST = 0.05
+SEASON_LENGTH = 250
+
 
 class Simulation:
     def __init__(self, 
@@ -31,13 +41,58 @@ class Simulation:
         for agent_id in range(initial_agents):
             (x, y) = self.world.random_position()
             self.agents.append(
-                Agent(agent_id, x= x, y= y, energy=50)
+                Agent(agent_id, x= x, y= y, parent_id=None, energy=50)
             )
+
+
+    def current_season(self):
+
+        cycle = (
+            self.tick // SEASON_LENGTH
+        ) % 4
+
+        if cycle == 0:
+            return Season.SPRING
+
+        if cycle == 1:
+            return Season.SUMMER
+
+        if cycle == 2:
+            return Season.AUTUMN
+
+        return Season.WINTER
+
+
     def move(self, agent: Agent):
-        dx = random.choice([-1, 0, 1])
-        dy = random.choice([-1, 0, 1])
-        agent.x = (agent.x + dx) % self.world.width
-        agent.y = (agent.y + dy) % self.world.height
+
+        target = self.world.find_food_within_radius(
+            agent.x,
+            agent.y,
+            agent.vision,
+        )
+
+        if target:
+            tx, ty = target
+
+            if tx > agent.x:
+                agent.x += 1
+            elif tx < agent.x:
+                agent.x -= 1
+
+            if ty > agent.y:
+                agent.y += 1
+            elif ty < agent.y:
+                agent.y -= 1
+
+        else:
+            dx = random.choice([-1, 0, 1])
+            dy = random.choice([-1, 0, 1])
+
+            agent.x += dx
+            agent.y += dy
+
+        agent.x %= self.world.width
+        agent.y %= self.world.height
 
     def eat(self, agent: Agent):
         if self.world.consume_food(agent.x, agent.y):
@@ -45,15 +100,32 @@ class Simulation:
 
 
     def reproduce(self, agent: Agent) -> Agent:
-        if agent.energy < REPRODUCTION_THRESHOLD:
+        if agent.energy < REPRODUCTION_THRESHOLD or agent.age < MIN_REPRODUCTION_AGE:
             return None
+        
         agent.energy -= REPRODUCTION_COST
-
+        vision = agent.vision
+        if random.random() < MUTATION_RATE:
+            vision += random.choice([-1, 1])
+        metabolism = agent.metabolism
+        if random.random() < MUTATION_RATE:
+            metabolism += random.uniform(-0.1, 0.1)
+        metabolism = max(
+            0.5,
+            min(2.0, metabolism)
+        )
+        vision = max(
+            MIN_VISION,
+            min(MAX_VISION, vision)
+        )
         child = Agent(
             id=self.next_agent_id,
             x=agent.x,
             y=agent.y,
             energy=CHILD_START_ENERGY,
+            parent_id=agent.id,
+            vision = vision,
+            metabolism=metabolism
         )
 
         self.next_agent_id += 1
@@ -63,7 +135,8 @@ class Simulation:
     def update_agent(self, agent: Agent):
          self.move(agent)
          self.eat(agent)
-         agent.energy -= ENERGY_LOSS_PER_TICK
+         energy_cost = (ENERGY_LOSS_PER_TICK + agent.metabolism + agent.vision * VISION_ENERGY_COST)
+         agent.energy -= energy_cost
          agent.age += 1
 
     def count_dead_agents(self):
@@ -73,7 +146,8 @@ class Simulation:
         self.agents = [agent for agent in self.agents if agent.is_alive()]
         
     def spawn_food(self):
-        for _ in range(self.food_spawn_per_tick):
+        amount = SEASONAL_FOOD[self.current_season()]
+        for _ in range(amount):
             self.world.spawn_food()
 
 
@@ -84,6 +158,30 @@ class Simulation:
             agent.energy for agent in self.agents
         ) / population if population > 0 else 0
         
+        avg_age = sum(agent.age for agent in self.agents) / population if population > 0 else 0
+
+        avg_vision = (
+            sum(a.vision for a in self.agents)
+            / population
+            if population > 0
+            else 0
+        )
+
+        max_vision = (
+            max(a.vision for a in self.agents)
+            if population > 0
+            else 0
+        )
+
+        min_vision = (
+            min(a.vision for a in self.agents)
+            if population > 0
+            else 0
+        )
+        avg_metabolism = (
+            sum(a.metabolism for a in self.agents)
+            / population if population > 0 else 0
+        )
         self.metrics.collect(
             tick=self.tick,
             population=population,
@@ -92,7 +190,13 @@ class Simulation:
             food_rotted=self.world.food_rotted,
             food_eaten=self.world.food_eaten,
             new_agents = self.new_agents,
-            dead_agents = self.dead_agents
+            dead_agents = self.dead_agents,
+            avg_age=avg_age,
+            avg_vision = avg_vision,
+            min_vision = min_vision,
+            max_vision = max_vision,
+            avg_metabolism=avg_metabolism,
+            season = self.current_season()
         )
 
     def step(self):

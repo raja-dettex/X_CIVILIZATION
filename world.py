@@ -11,6 +11,16 @@ class Food:
     age: int = 0
 
 
+from enum import Enum
+
+
+class Season(Enum):
+    SPRING = "spring"
+    SUMMER = "summer"
+    AUTUMN = "autumn"
+    WINTER = "winter"
+
+
 class World:
     def __init__(self, width: int, height: int, initial_food: int):
         self.width = width
@@ -45,6 +55,22 @@ class World:
 
     def get_food(self, x: int, y: int) -> int:
         return self.food.get((x, y), 0)
+
+
+    def find_food_within_radius(self, x: int, y: int, radius: int) -> (int, int):
+        nearest = None
+        nearest_distance = None
+        for (fx, fy), food in self.food.items():
+            dx = abs(fx - x)
+            dy = abs(fy - y)
+            distance = dx + dy
+            if distance > radius:
+                continue
+            if nearest is None or distance < nearest_distance:
+                nearest = (fx, fy)
+                nearest_distance = distance
+        return nearest
+
 
     def consume_food(self, x: int, y: int) -> bool:
         if (x,y) not in self.food:
