@@ -1,8 +1,8 @@
 CONFIG = {
-    "width": 100,
-    "height": 100,
+    "width": 30,
+    "height": 30,
     "initial_agents": 100,
     "initial_food": 500,
-    "food_spawn_per_tick": 5,
+    "food_spawn_per_tick": 10,
     "ticks": 5000,
 }

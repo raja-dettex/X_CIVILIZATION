@@ -21,7 +21,11 @@ def main():
                 f"[Tick={m['tick']}] "
                 f"Population={m['population']} "
                 f"Food={m['food']} "
-                f"AvgEnergy={m['avg_energy']:.2f}"
+                f"AvgEnergy={m['avg_energy']:.2f} "
+                f"FoodRotted={m['food_rotted']} "
+                f"FoodEaten={m['food_eaten']} "
+                f"NewAgents={m['new_agents']} "
+                f"DeadAgents={m['dead_agents']} "
             )
 
         if len(sim.agents) == 0:
